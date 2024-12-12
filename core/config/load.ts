@@ -64,6 +64,7 @@ import {
 import { slashCommandFromPromptFileV1 } from "../promptFiles/v1/slashCommandFromPromptFile";
 import { getAllPromptFiles } from "../promptFiles/v2/getPromptFiles";
 import {
+  defaultConfigGranite,
   defaultContextProvidersJetBrains,
   defaultContextProvidersVsCode,
   defaultSlashCommandsJetBrains,
@@ -78,9 +79,9 @@ export interface ConfigResult<T> {
   configLoadInterrupted: boolean;
 }
 
-function resolveSerializedConfig(filepath: string): SerializedContinueConfig {
+function resolveSerializedConfig(filepath: string): Partial<SerializedContinueConfig> {
   let content = fs.readFileSync(filepath, "utf8");
-  const config = JSONC.parse(content) as unknown as SerializedContinueConfig;
+  const config = JSONC.parse(content) as unknown as Partial<SerializedContinueConfig>;
   if (config.env && Array.isArray(config.env)) {
     const env = {
       ...process.env,
@@ -97,7 +98,7 @@ function resolveSerializedConfig(filepath: string): SerializedContinueConfig {
     });
   }
 
-  return JSONC.parse(content) as unknown as SerializedContinueConfig;
+  return JSONC.parse(content) as unknown as Partial<SerializedContinueConfig>;
 }
 
 const configMergeKeys = {
@@ -113,13 +114,17 @@ function loadSerializedConfig(
   ideType: IdeType,
   overrideConfigJson: SerializedContinueConfig | undefined,
 ): ConfigResult<SerializedContinueConfig> {
-  const configPath = getConfigJsonPath(ideType);
   let config: SerializedContinueConfig = overrideConfigJson!;
   if (!config) {
+    config = defaultConfigGranite;
+
+    const configPath = getConfigJsonPath(ideType);
     try {
-      config = resolveSerializedConfig(configPath);
+      const configJson = resolveSerializedConfig(configPath);
+      config = mergeJson(config, configJson, "merge", configMergeKeys);
+
     } catch (e) {
-      throw new Error(`Failed to parse config.json: ${e}`);
+      console.warn("Error loading remote config: ", e);
     }
   }
 
