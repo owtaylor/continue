@@ -47,6 +47,7 @@ class FileSystemIde implements IDE {
       enableControlServerBeta: false,
       pauseCodebaseIndexOnStart: false,
       enableDebugLogs: false,
+      localModelSize: "large",
     };
   }
   async getGitHubAuthToken(args: GetGhTokenArgs): Promise<string | undefined> {
