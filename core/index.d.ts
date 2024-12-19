@@ -573,6 +573,8 @@ export enum FileType {
   SymbolicLink = 64,
 }
 
+export type LocalModelSize = undefined | "small" | "large";
+
 export interface IdeSettings {
   remoteConfigServerUrl: string | undefined;
   remoteConfigSyncPeriod: number;
@@ -580,6 +582,7 @@ export interface IdeSettings {
   enableControlServerBeta: boolean;
   pauseCodebaseIndexOnStart: boolean;
   enableDebugLogs: boolean;
+  localModelSize: LocalModelSize;
 }
 
 export interface FileStats {

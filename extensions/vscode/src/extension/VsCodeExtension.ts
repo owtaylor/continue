@@ -382,6 +382,9 @@ export class VsCodeExtension {
           settings,
         });
       }
+      if (event.affectsConfiguration("continue.localModelSize")) {
+        this.configHandler.updateIdeSettings(this.ide.getIdeSettingsSync());
+      }
     });
   }
 
