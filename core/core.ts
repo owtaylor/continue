@@ -279,6 +279,9 @@ export class Core {
     on("config/listProfiles", (msg) => {
       return this.configHandler.listProfiles();
     });
+    on("config/writeContinueConfig", async (msg) => {
+      await this.configHandler.writeContinueConfig();
+    });
 
     on("config/addContextProvider", async (msg) => {
       addContextProvider(msg.data);
