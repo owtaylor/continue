@@ -1012,7 +1012,7 @@ const getCommandsMap: (
       });
     },
     "granite.setup": () => {
-      SetupGranitePage.render(extensionContext);
+      SetupGranitePage.render(extensionContext, configHandler);
     }
   };
 };
