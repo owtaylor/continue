@@ -2,17 +2,21 @@ import {
   ArrowRightIcon,
   ArrowUpOnSquareIcon,
   AtSymbolIcon,
+  Bars3BottomLeftIcon,
   BoltIcon,
   BookOpenIcon,
+  BugAntIcon,
+  CircleStackIcon,
   CodeBracketIcon,
   CommandLineIcon,
+  CpuChipIcon,
   DocumentTextIcon,
-  ExclamationCircleIcon,
   ExclamationTriangleIcon,
   FolderIcon,
   FolderOpenIcon,
   GlobeAltIcon,
   MagnifyingGlassIcon,
+  PaperClipIcon,
   PlusIcon,
   SparklesIcon,
   TrashIcon,
@@ -43,6 +47,10 @@ import SafeImg from "../SafeImg";
 import AddDocsDialog from "../dialogs/AddDocsDialog";
 import HeaderButtonWithToolTip from "../gui/HeaderButtonWithToolTip";
 import { ComboBoxItem, ComboBoxItemType } from "./types";
+import { DiscordIcon } from "../svg/DiscordIcon";
+import { GoogleIcon } from "../svg/GoogleIcon";
+import { GitlabIcon } from "../svg/GitlabIcon";
+import { GithubIcon } from "../svg/GithubIcon";
 
 const ICONS_FOR_DROPDOWN: { [key: string]: any } = {
   file: FolderIcon,
@@ -56,21 +64,31 @@ const ICONS_FOR_DROPDOWN: { [key: string]: any } = {
   problems: ExclamationTriangleIcon,
   folder: FolderIcon,
   docs: BookOpenIcon,
-  issue: ExclamationCircleIcon,
-  trash: TrashIcon,
   web: GlobeAltIcon,
+  clipboard: PaperClipIcon,
+  database: CircleStackIcon,
+  postgres: CircleStackIcon,
+  debugger: BugAntIcon,
+  os: CpuChipIcon,
+  tree: Bars3BottomLeftIcon,
   "prompt-files": DocumentTextIcon,
   "repo-map": FolderIcon,
   "/clear": TrashIcon,
   "/share": ArrowUpOnSquareIcon,
   "/cmd": CommandLineIcon,
+  issue: GithubIcon,
+  discord: DiscordIcon,
+  google: GoogleIcon,
+  "gitlab-mr": GitlabIcon,
+  http: GlobeAltIcon,
 };
 
-export function getIconFromDropdownItem(id: string, type: ComboBoxItemType) {
-  return (
-    ICONS_FOR_DROPDOWN[id] ??
-    (type === "contextProvider" ? AtSymbolIcon : BoltIcon)
-  );
+export function getIconFromDropdownItem(
+  id: string | undefined,
+  type: ComboBoxItemType,
+) {
+  const typeIcon = type === "contextProvider" ? AtSymbolIcon : BoltIcon;
+  return id ? (ICONS_FOR_DROPDOWN[id] ?? typeIcon) : typeIcon;
 }
 
 function DropdownIcon(props: { className?: string; item: ComboBoxItem }) {
@@ -238,7 +256,7 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
     }
   }, [querySubmenuItem]);
 
-  const selectItem = (index) => {
+  const selectItem = (index: number) => {
     const item = allItems[index];
 
     if (item.type === "action" && item.action) {
@@ -251,7 +269,9 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
       item.contextProvider?.type === "submenu"
     ) {
       setSubMenuTitle(item.description);
-      props.enterSubmenu(props.editor, item.id);
+      if (item.id) {
+        props.enterSubmenu?.(props.editor, item.id);
+      }
       return;
     }
 
@@ -308,7 +328,7 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
   useEffect(() => setSelectedIndex(0), [allItems]);
 
   useImperativeHandle(ref, () => ({
-    onKeyDown: ({ event }) => {
+    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
       if (event.key === "ArrowUp") {
         upHandler();
         return true;
@@ -359,6 +379,9 @@ const MentionList = forwardRef((props: MentionListProps, ref) => {
           ref={queryInputRef}
           placeholder={querySubmenuItem.description}
           onKeyDown={(e) => {
+            if (!queryInputRef.current) {
+              return;
+            }
             if (e.key === "Enter") {
               if (e.shiftKey) {
                 queryInputRef.current.innerText += "\n";
