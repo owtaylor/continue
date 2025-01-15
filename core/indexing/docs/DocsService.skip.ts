@@ -47,6 +47,7 @@ describe.skip("DocsService Integration Tests", () => {
         ideSettings: {} as any,
         enableDebugLogs: false,
         remoteConfigServerUrl: "",
+        localModelSize: undefined,
       }),
       async () => {},
       new ControlPlaneClient(
