@@ -442,7 +442,7 @@ export abstract class BaseLLM implements ILLM {
             throw new Error(message);
           }
         }
-        throw new Error(e.message);
+        throw e;
       }
     };
     return withExponentialBackoff<Response>(
