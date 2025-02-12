@@ -6,6 +6,7 @@ import {
   ContinueConfig,
   IDE,
   IdeSettings,
+  ILLMLogger,
   SerializedContinueConfig,
 } from "../../index.js";
 import { ProfileDescription } from "../ProfileLifecycleManager.js";
@@ -26,7 +27,7 @@ export default class ControlPlaneProfileLoader implements IProfileLoader {
     private readonly controlPlaneClient: ControlPlaneClient,
     private readonly ide: IDE,
     private ideSettingsPromise: Promise<IdeSettings>,
-    private writeLog: (message: string) => Promise<void>,
+    private llmLogger: ILLMLogger,
     private readonly onReload: () => void,
   ) {
     this.description = {
@@ -63,7 +64,7 @@ export default class ControlPlaneProfileLoader implements IProfileLoader {
       this.ide,
       this.ideSettingsPromise,
       this.controlPlaneClient,
-      this.writeLog,
+      this.llmLogger,
       serializedConfig,
       undefined,
       undefined,

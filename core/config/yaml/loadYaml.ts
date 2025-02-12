@@ -16,6 +16,7 @@ import {
   IDE,
   IdeInfo,
   IdeSettings,
+  ILLMLogger,
   SlashCommand,
 } from "../..";
 import { slashFromCustomCommand } from "../../commands";
@@ -100,7 +101,7 @@ async function configYamlToContinueConfig(
   ideSettings: IdeSettings,
   ideInfo: IdeInfo,
   uniqueId: string,
-  writeLog: (log: string) => Promise<void>,
+  llmLogger: ILLMLogger,
   workOsAccessToken: string | undefined,
   platformConfigMetadata: PlatformConfigMetadata | undefined,
   allowFreeTrial: boolean = true,
@@ -161,7 +162,7 @@ async function configYamlToContinueConfig(
       ide,
       uniqueId,
       ideSettings,
-      writeLog,
+      llmLogger,
       platformConfigMetadata,
       continueConfig.systemMessage,
     );
@@ -361,7 +362,7 @@ export async function loadContinueConfigFromYaml(
   ideSettings: IdeSettings,
   ideInfo: IdeInfo,
   uniqueId: string,
-  writeLog: (log: string) => Promise<void>,
+  llmLogger: ILLMLogger,
   workOsAccessToken: string | undefined,
   overrideConfigYaml: AssistantUnrolled | undefined,
   platformConfigMetadata: PlatformConfigMetadata | undefined,
@@ -394,7 +395,7 @@ export async function loadContinueConfigFromYaml(
     ideSettings,
     ideInfo,
     uniqueId,
-    writeLog,
+    llmLogger,
     workOsAccessToken,
     platformConfigMetadata,
   );

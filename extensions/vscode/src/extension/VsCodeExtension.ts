@@ -22,6 +22,7 @@ import {
 } from "../autocomplete/statusBar";
 import { registerAllCommands } from "../commands";
 import { ContinueGUIWebviewViewProvider } from "../ContinueGUIWebviewViewProvider";
+import { ContinueLogWebviewViewProvider } from "../ContinueLogWebviewViewProvider";
 import { VerticalDiffManager } from "../diff/vertical/manager";
 import { registerAllCodeLensProviders } from "../lang-server/codeLens";
 import { registerAllPromptFilesCompletionProviders } from "../lang-server/promptFileCompletions";
@@ -46,6 +47,7 @@ export class VsCodeExtension {
   private configHandler: ConfigHandler;
   private extensionContext: vscode.ExtensionContext;
   private ide: VsCodeIde;
+  private logView: ContinueLogWebviewViewProvider;
   private sidebar: ContinueGUIWebviewViewProvider;
   private windowId: string;
   private editDecorationManager: EditDecorationManager;
@@ -122,19 +124,12 @@ export class VsCodeExtension {
       this.editDecorationManager,
     );
 
-    this.core = new Core(inProcessMessenger, this.ide, async (log: string) => {
-      outputChannel.appendLine(
-        "==========================================================================",
-      );
-      outputChannel.appendLine(
-        "==========================================================================",
-      );
-      outputChannel.append(log);
-    });
+    this.core = new Core(inProcessMessenger, this.ide);
     this.configHandler = this.core.configHandler;
     resolveConfigHandler?.(this.configHandler);
 
     this.configHandler.loadConfig();
+
     this.verticalDiffManager = new VerticalDiffManager(
       this.configHandler,
       this.sidebar.webviewProtocol,
@@ -213,6 +208,23 @@ export class VsCodeExtension {
       this.ide,
       context,
       this.fileSearch,
+    );
+
+    // LLM Log view
+    this.logView = new ContinueLogWebviewViewProvider(
+      this.windowId,
+      this.extensionContext,
+      this.core.llmLogger,
+    );
+
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        "continue.continueLogView",
+        this.logView,
+        {
+          webviewOptions: { retainContextWhenHidden: true },
+        },
+      ),
     );
 
     // Commands

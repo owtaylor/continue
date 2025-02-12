@@ -16,6 +16,8 @@ import {
   Chunk,
   CompletionOptions,
   ILLM,
+  ILLMInteractionLog,
+  ILLMLogger,
   LLMFullCompletionOptions,
   LLMOptions,
   ModelCapability,
@@ -115,7 +117,7 @@ export abstract class BaseLLM implements ILLM {
   template?: TemplateType;
   promptTemplates?: Record<string, PromptTemplate>;
   templateMessages?: (messages: ChatMessage[]) => string;
-  writeLog?: (str: string) => Promise<void>;
+  logger?: ILLMLogger;
   llmRequestHook?: (model: string, prompt: string) => any;
   apiKey?: string;
 
@@ -201,7 +203,7 @@ export abstract class BaseLLM implements ILLM {
         options.template,
       ) ??
       undefined;
-    this.writeLog = options.writeLog;
+    this.logger = options.logger;
     this.llmRequestHook = options.llmRequestHook;
     this.apiKey = options.apiKey;
 
@@ -329,10 +331,12 @@ export abstract class BaseLLM implements ILLM {
     );
   }
 
-  private _logTokensGenerated(
+  private _logEnd(
     model: string,
     prompt: string,
     completion: string,
+    interaction: ILLMInteractionLog | undefined,
+    error?: any,
   ) {
     let promptTokens = this.countTokens(prompt);
     let generatedTokens = this.countTokens(completion);
@@ -364,6 +368,31 @@ export abstract class BaseLLM implements ILLM {
         generatedTokens: generatedTokens,
       },
     });
+
+    if (error != null) {
+      if (error.name == "AbortError") {
+        interaction?.logItem({
+          kind: "cancel",
+          promptTokens,
+          generatedTokens,
+        });
+      } else {
+        console.log(error);
+        interaction?.logItem({
+          kind: "error",
+          name: error.name,
+          message: error.message,
+          promptTokens,
+          generatedTokens,
+        });
+      }
+    } else {
+      interaction?.logItem({
+        kind: "success",
+        promptTokens,
+        generatedTokens,
+      });
+    }
   }
 
   fetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -517,50 +546,62 @@ export abstract class BaseLLM implements ILLM {
   ): AsyncGenerator<string> {
     const { completionOptions, logEnabled } =
       this._parseCompletionOptions(options);
+    const interaction = logEnabled
+      ? this.logger?.createInteractionLog()
+      : undefined;
 
     const fimLog = `Prefix: ${prefix}\nSuffix: ${suffix}`;
     if (logEnabled) {
-      if (this.writeLog) {
-        await this.writeLog(
-          this._compilePromptForLog(fimLog, completionOptions),
-        );
-      }
+      interaction?.logItem({
+        kind: "startFim",
+        prefix,
+        suffix,
+        options: completionOptions,
+      });
       if (this.llmRequestHook) {
         this.llmRequestHook(completionOptions.model, fimLog);
       }
     }
 
     let completion = "";
-
-    if (this.shouldUseOpenAIAdapter("streamFim") && this.openaiAdapter) {
-      const stream = this.openaiAdapter.fimStream(
-        toFimBody(prefix, suffix, completionOptions),
-        signal,
-      );
-      for await (const chunk of stream) {
-        const result = fromChatCompletionChunk(chunk);
-        if (result) {
-          const content = renderChatMessage(result);
-          completion += content;
-          yield content;
+    try {
+      if (this.shouldUseOpenAIAdapter("streamFim") && this.openaiAdapter) {
+        const stream = this.openaiAdapter.fimStream(
+          toFimBody(prefix, suffix, completionOptions),
+          signal,
+        );
+        for await (const chunk of stream) {
+          const result = fromChatCompletionChunk(chunk);
+          if (result) {
+            const content = renderChatMessage(result);
+            interaction?.logItem({
+              kind: "chunk",
+              chunk: content,
+            });
+            completion += content;
+            yield content;
+          }
+        }
+      } else {
+        for await (const chunk of this._streamFim(
+          prefix,
+          suffix,
+          signal,
+          completionOptions,
+        )) {
+          interaction?.logItem({
+            kind: "chunk",
+            chunk,
+          });
+          completion += chunk;
+          yield chunk;
         }
       }
-    } else {
-      for await (const chunk of this._streamFim(
-        prefix,
-        suffix,
-        signal,
-        completionOptions,
-      )) {
-        completion += chunk;
-        yield chunk;
-      }
-    }
 
-    this._logTokensGenerated(completionOptions.model, fimLog, completion);
-
-    if (logEnabled && this.writeLog) {
-      await this.writeLog(`Completion:\n${completion}\n\n`);
+      this._logEnd(completionOptions.model, fimLog, completion, interaction);
+    } catch (e) {
+      this._logEnd(completionOptions.model, fimLog, completion, interaction, e);
+      throw e;
     }
 
     return {
@@ -577,6 +618,9 @@ export abstract class BaseLLM implements ILLM {
   ) {
     const { completionOptions, logEnabled, raw } =
       this._parseCompletionOptions(options);
+    const interaction = logEnabled
+      ? this.logger?.createInteractionLog()
+      : undefined;
 
     let prompt = pruneRawPromptFromTop(
       completionOptions.model,
@@ -590,11 +634,11 @@ export abstract class BaseLLM implements ILLM {
     }
 
     if (logEnabled) {
-      if (this.writeLog) {
-        await this.writeLog(
-          this._compilePromptForLog(prompt, completionOptions),
-        );
-      }
+      interaction?.logItem({
+        kind: "startComplete",
+        prompt,
+        options: completionOptions,
+      });
       if (this.llmRequestHook) {
         this.llmRequestHook(completionOptions.model, prompt);
       }
@@ -622,6 +666,10 @@ export abstract class BaseLLM implements ILLM {
           )) {
             const content = chunk.choices[0]?.text ?? "";
             completion += content;
+            interaction?.logItem({
+              kind: "chunk",
+              chunk: content,
+            });
             yield content;
           }
         }
@@ -632,15 +680,17 @@ export abstract class BaseLLM implements ILLM {
           completionOptions,
         )) {
           completion += chunk;
+          interaction?.logItem({
+            kind: "chunk",
+            chunk,
+          });
           yield chunk;
         }
       }
-    } finally {
-      this._logTokensGenerated(completionOptions.model, prompt, completion);
-
-      if (logEnabled && this.writeLog) {
-        await this.writeLog(`Completion:\n${completion}\n\n`);
-      }
+      this._logEnd(completionOptions.model, prompt, completion, interaction);
+    } catch (e) {
+      this._logEnd(completionOptions.model, prompt, completion, interaction, e);
+      throw e;
     }
 
     return {
@@ -658,6 +708,9 @@ export abstract class BaseLLM implements ILLM {
   ) {
     const { completionOptions, logEnabled, raw } =
       this._parseCompletionOptions(options);
+    const interaction = logEnabled
+      ? this.logger?.createInteractionLog()
+      : undefined;
 
     let prompt = pruneRawPromptFromTop(
       completionOptions.model,
@@ -671,34 +724,41 @@ export abstract class BaseLLM implements ILLM {
     }
 
     if (logEnabled) {
-      if (this.writeLog) {
-        await this.writeLog(
-          this._compilePromptForLog(prompt, completionOptions),
-        );
-      }
+      interaction?.logItem({
+        kind: "startComplete",
+        prompt: prompt,
+        options: completionOptions,
+      });
       if (this.llmRequestHook) {
         this.llmRequestHook(completionOptions.model, prompt);
       }
     }
 
-    let completion: string;
-    if (this.shouldUseOpenAIAdapter("complete") && this.openaiAdapter) {
-      const result = await this.openaiAdapter.completionNonStream(
-        {
-          ...toCompleteBody(prompt, completionOptions),
-          stream: false,
-        },
-        signal,
-      );
-      completion = result.choices[0].text;
-    } else {
-      completion = await this._complete(prompt, signal, completionOptions);
-    }
+    let completion: string = "";
 
-    this._logTokensGenerated(completionOptions.model, prompt, completion);
+    try {
+      if (this.shouldUseOpenAIAdapter("complete") && this.openaiAdapter) {
+        const result = await this.openaiAdapter.completionNonStream(
+          {
+            ...toCompleteBody(prompt, completionOptions),
+            stream: false,
+          },
+          signal,
+        );
+        completion = result.choices[0].text;
+      } else {
+        completion = await this._complete(prompt, signal, completionOptions);
+      }
 
-    if (logEnabled && this.writeLog) {
-      await this.writeLog(`Completion:\n${completion}\n\n`);
+      interaction?.logItem({
+        kind: "chunk",
+        chunk: completion,
+      });
+
+      this._logEnd(completionOptions.model, prompt, completion, interaction);
+    } catch (e) {
+      this._logEnd(completionOptions.model, prompt, completion, interaction, e);
+      throw e;
     }
 
     return completion;
@@ -743,6 +803,9 @@ export abstract class BaseLLM implements ILLM {
   ): AsyncGenerator<ChatMessage, PromptLog> {
     let { completionOptions, logEnabled } =
       this._parseCompletionOptions(options);
+    const interaction = logEnabled
+      ? this.logger?.createInteractionLog()
+      : undefined;
 
     completionOptions = this._modifyCompletionOptions(completionOptions);
 
@@ -752,11 +815,11 @@ export abstract class BaseLLM implements ILLM {
       ? this.templateMessages(messages)
       : this._formatChatMessages(messages);
     if (logEnabled) {
-      if (this.writeLog) {
-        await this.writeLog(
-          this._compilePromptForLog(prompt, completionOptions),
-        );
-      }
+      interaction?.logItem({
+        kind: "startChat",
+        messages,
+        options: completionOptions,
+      });
       if (this.llmRequestHook) {
         this.llmRequestHook(completionOptions.model, prompt);
       }
@@ -772,6 +835,10 @@ export abstract class BaseLLM implements ILLM {
           completionOptions,
         )) {
           completion += chunk;
+          interaction?.logItem({
+            kind: "chunk",
+            chunk: chunk,
+          });
           yield { role: "assistant", content: chunk };
         }
       } else {
@@ -800,6 +867,11 @@ export abstract class BaseLLM implements ILLM {
             for await (const chunk of stream) {
               const result = fromChatCompletionChunk(chunk);
               if (result) {
+                completion += result.content;
+                interaction?.logItem({
+                  kind: "message",
+                  message: result,
+                });
                 yield result;
               }
             }
@@ -811,19 +883,18 @@ export abstract class BaseLLM implements ILLM {
             completionOptions,
           )) {
             completion += chunk.content;
+            interaction?.logItem({
+              kind: "message",
+              message: chunk,
+            });
             yield chunk;
           }
         }
       }
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
-
-    this._logTokensGenerated(completionOptions.model, prompt, completion);
-
-    if (logEnabled && this.writeLog) {
-      await this.writeLog(`Completion:\n${completion}\n\n`);
+      this._logEnd(completionOptions.model, prompt, completion, interaction);
+    } catch (e) {
+      this._logEnd(completionOptions.model, prompt, completion, interaction, e);
+      throw e;
     }
 
     return {

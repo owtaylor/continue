@@ -27,6 +27,7 @@ import {
   IdeSettings,
   IdeType,
   ILLM,
+  ILLMLogger,
   LLMOptions,
   ModelDescription,
   RerankerDescription,
@@ -239,7 +240,7 @@ async function intermediateToFinalConfig(
   ideSettings: IdeSettings,
   ideInfo: IdeInfo,
   uniqueId: string,
-  writeLog: (log: string) => Promise<void>,
+  llmLogger: ILLMLogger,
   workOsAccessToken: string | undefined,
   loadPromptFiles: boolean = true,
   allowFreeTrial: boolean = true,
@@ -255,7 +256,7 @@ async function intermediateToFinalConfig(
         ide.readFile.bind(ide),
         uniqueId,
         ideSettings,
-        writeLog,
+        llmLogger,
         config.completionOptions,
         config.systemMessage,
       );
@@ -277,7 +278,7 @@ async function intermediateToFinalConfig(
                 ide.readFile.bind(ide),
                 uniqueId,
                 ideSettings,
-                writeLog,
+                llmLogger,
                 copyOf(config.completionOptions),
                 config.systemMessage,
               );
@@ -297,7 +298,7 @@ async function intermediateToFinalConfig(
     } else {
       const llm = new CustomLLMClass({
         ...desc,
-        options: { ...desc.options, writeLog } as any,
+        options: { ...desc.options, logger: llmLogger } as any,
       });
       if (llm.model === "AUTODETECT") {
         try {
@@ -306,7 +307,11 @@ async function intermediateToFinalConfig(
             (modelName) =>
               new CustomLLMClass({
                 ...desc,
-                options: { ...desc.options, model: modelName, writeLog },
+                options: {
+                  ...desc.options,
+                  model: modelName,
+                  logger: llmLogger,
+                },
               }),
           );
 
@@ -360,7 +365,7 @@ async function intermediateToFinalConfig(
               ide.readFile.bind(ide),
               uniqueId,
               ideSettings,
-              writeLog,
+              llmLogger,
               config.completionOptions,
               config.systemMessage,
             );
@@ -870,7 +875,7 @@ async function loadContinueConfigFromJson(
   ideSettings: IdeSettings,
   ideInfo: IdeInfo,
   uniqueId: string,
-  writeLog: (log: string) => Promise<void>,
+  llmLogger: ILLMLogger,
   workOsAccessToken: string | undefined,
   overrideConfigJson: SerializedContinueConfig | undefined,
 ): Promise<ConfigResult<ContinueConfig>> {
@@ -970,7 +975,7 @@ async function loadContinueConfigFromJson(
       ideSettings,
       ideInfo,
       uniqueId,
-      writeLog,
+      llmLogger,
       workOsAccessToken,
     );
   return {

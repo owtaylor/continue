@@ -14,6 +14,7 @@ import {
   IDE,
   IdeSettings,
   ILLM,
+  ILLMLogger,
 } from "../index.js";
 import Ollama from "../llm/llms/Ollama.js";
 import { GlobalContext } from "../util/GlobalContext.js";
@@ -51,12 +52,11 @@ export class ConfigHandler {
   constructor(
     private readonly ide: IDE,
     private ideSettingsPromise: Promise<IdeSettings>,
-    private readonly writeLog: (text: string) => Promise<void>,
+    private llmLogger: ILLMLogger,
     sessionInfoPromise: Promise<ControlPlaneSessionInfo | undefined>,
   ) {
     this.ide = ide;
     this.ideSettingsPromise = ideSettingsPromise;
-    this.writeLog = writeLog;
     this.controlPlaneClient = new ControlPlaneClient(
       sessionInfoPromise,
       ideSettingsPromise,
@@ -67,7 +67,7 @@ export class ConfigHandler {
       ide,
       ideSettingsPromise,
       this.controlPlaneClient,
-      writeLog,
+      this.llmLogger,
     );
     this.localProfileManager = new ProfileLifecycleManager(
       localProfileLoader,
@@ -180,7 +180,7 @@ export class ConfigHandler {
           this.controlPlaneClient,
           this.ide,
           this.ideSettingsPromise,
-          this.writeLog,
+          this.llmLogger,
           this.reloadConfig.bind(this),
         );
 
@@ -286,7 +286,7 @@ export class ConfigHandler {
             this.controlPlaneClient,
             this.ide,
             this.ideSettingsPromise,
-            this.writeLog,
+            this.llmLogger,
             this.reloadConfig.bind(this),
           );
 
