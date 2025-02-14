@@ -52,7 +52,7 @@ export default function ToolDropdown(props: ToolDropdownProps) {
     <HoverItem onClick={() => !props.disabled && dispatch(toggleUseTools())}>
       <div
         data-tooltip-id="tools-tooltip"
-        className={`-ml-1 -mt-1 flex flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs ${
+        className={`-ml-2 -mt-1 flex flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs ${
           (useTools || isHovered) && !props.disabled ? "bg-lightgray/30" : ""
         } ${props.disabled ? "cursor-not-allowed opacity-50" : ""}`}
       >
@@ -76,8 +76,6 @@ export default function ToolDropdown(props: ToolDropdownProps) {
 
         {useTools && !props.disabled && (
           <>
-            <span className="hidden align-top sm:flex">Tools</span>
-
             <div className="relative">
               <Listbox
                 value={null}
