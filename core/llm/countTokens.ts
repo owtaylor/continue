@@ -16,6 +16,12 @@ interface Encoding {
   decode: Tiktoken["decode"];
 }
 
+const GRANITE_TOOLS_MESSAGE = `You are a helpful AI assistant with access \
+to the following tools. When a tool is required to answer the user's query, \
+respond with <|tool_call|> followed by a JSON list of tools used. If a tool \
+does not exist in the provided list of tools, notify the user that you do not \
+have the ability to fulfill the request.`;
+
 class LlamaEncoding implements Encoding {
   encode(text: string): number[] {
     return llamaTokenizer.encode(text);
@@ -425,24 +431,38 @@ function compileChatMessages(
     msgsCopy.push(promptMsg);
   }
 
+  const systemPieces: string[] = [];
+  if (msgs?.[0]?.role === "system") {
+    systemPieces.push(renderChatMessage(msgs?.[0]));
+  }
+  if (systemMessage) {
+    systemPieces.push(systemMessage);
+  }
+
+  // If a custom system message is provided, the Granite 3
+  // models do not modify it at all, in particular, they
+  // don't include the necessary information about how to
+  // use tools.
   if (
-    (systemMessage && systemMessage.trim() !== "") ||
-    msgs?.[0]?.role === "system"
+    functions &&
+    functions.length > 0 &&
+    (modelName.toLowerCase().startsWith("granite3") ||
+      modelName.toLowerCase().startsWith("granite-3"))
   ) {
-    let content = "";
-    if (msgs?.[0]?.role === "system") {
-      content = renderChatMessage(msgs?.[0]);
-    }
-    if (systemMessage && systemMessage.trim() !== "") {
-      const shouldAddNewLines = content !== "";
-      if (shouldAddNewLines) {
-        content += "\n\n";
-      }
-      content += systemMessage;
-    }
+    systemPieces.push(GRANITE_TOOLS_MESSAGE);
+  }
+
+  console.log("XXXX", functions, modelName, systemPieces);
+
+  const systemContent = systemPieces
+    .map((piece) => piece.trim())
+    .filter((piece) => piece !== "")
+    .join("\n\n");
+
+  if (systemContent !== "") {
     const systemChatMsg: ChatMessage = {
       role: "system",
-      content,
+      content: systemContent,
     };
     // Insert as second to last
     // Later moved to top, but want second-priority to last user message

@@ -293,7 +293,7 @@ export abstract class BaseLLM implements ILLM {
       options.maxTokens ?? DEFAULT_MAX_TOKENS,
       this.supportsImages(),
       undefined,
-      functions,
+      options.tools,
       this.systemMessage,
     );
   }
