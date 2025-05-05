@@ -306,6 +306,64 @@ const codegeexFimTemplate: AutocompleteTemplate = {
   },
 };
 
+const graniteMultifileFimTemplate: AutocompleteTemplate = {
+  compilePrefixSuffix: (
+    prefix,
+    suffix,
+    filepath,
+    reponame,
+    snippets,
+    workspaceUris,
+  ): [string, string] => {
+    function getFileName(snippet: { uri: string; uniquePath: string }) {
+      return snippet.uri.startsWith("file://")
+        ? snippet.uniquePath
+        : snippet.uri;
+    }
+
+    if (snippets.length === 0) {
+      if (suffix.trim().length === 0 && prefix.trim().length === 0) {
+        return [
+          `<filename>${getLastNUriRelativePathParts(workspaceUris, filepath, 2)}\n${prefix}`,
+          suffix,
+        ];
+      }
+      return [prefix, suffix];
+    }
+
+    const relativePaths = getShortestUniqueRelativeUriPaths(
+      [
+        ...snippets.map((snippet) =>
+          "filepath" in snippet ? snippet.filepath : "file:///Untitled.txt",
+        ),
+        filepath,
+      ],
+      workspaceUris,
+    );
+
+    const otherFiles = snippets
+      .map((snippet, i) => {
+        if (snippet.type === AutocompleteSnippetType.Diff) {
+          return snippet.content;
+        }
+
+        return `<filename>${getFileName(relativePaths[i])}\n${snippet.content}`;
+      })
+      .join("\n\n");
+
+    return [
+      `${otherFiles}\n\n<filename>${getFileName(relativePaths[relativePaths.length - 1])}\n${prefix}`,
+      suffix,
+    ];
+  },
+  template: (prefix: string, suffix: string): string => {
+    return `<fim_prefix>${prefix}<fim_suffix>${suffix}<fim_middle>`;
+  },
+  completionOptions: {
+    stop: ["<filename>", "<fim_prefix>", "<fim_suffix>", "<fim_middle>"],
+  },
+};
+
 const gptAutocompleteTemplate: AutocompleteTemplate = {
   template: `\`\`\`
 {{{prefix}}}[BLANK]{{{suffix}}}
@@ -459,11 +517,23 @@ export function getTemplateForModel(model: string): AutocompleteTemplate {
   }
 
   if (
-    lowerCaseModel.includes("gpt") ||
-    lowerCaseModel.includes("davinci-002") ||
-    lowerCaseModel.includes("claude") ||
     lowerCaseModel.includes("granite3") ||
     lowerCaseModel.includes("granite-3")
+  ) {
+    let versionPart = /granite([0-9.]+)/.exec(lowerCaseModel)?.[1];
+    if (
+      !["3", "3.0", "3.1", "3.2"].includes(versionPart ?? "") &&
+      lowerCaseModel.includes("base")
+    )
+      return graniteMultifileFimTemplate;
+
+    return holeFillerTemplate;
+  }
+
+  if (
+    lowerCaseModel.includes("gpt") ||
+    lowerCaseModel.includes("davinci-002") ||
+    lowerCaseModel.includes("claude")
   ) {
     return holeFillerTemplate;
   }
